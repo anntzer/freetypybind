@@ -11,9 +11,11 @@ def get_pkg_config(info, lib):
 
 EXTENSION = Extension(
     "freetypybind._ft2",
-    ["src/_ft2.cpp", "src/_layout.cpp", "src/_util.cpp"],
+    ["src/_ft2.cpp", "src/_layout.cpp", "src/_util.cpp",
+     "src/_sfnt_tables.cpp"],
     depends=
-        ["setup.py", "src/_ft2.h", "src/_layout.h", "src/_util.h"],
+        ["setup.py", "src/_ft2.h", "src/_layout.h", "src/_util.h",
+         "src/_sfnt_tables.h"],
     language=
         "c++",
     include_dirs=

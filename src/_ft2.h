@@ -9,6 +9,7 @@ FT_Library library;
 struct Face {
   std::shared_ptr<FT_FaceRec_> const ptr;
   std::string const path;
+  FT_Long index;
   double const hinting_factor;
 
   Face(std::string const& path, FT_Long index, double hinting_factor);

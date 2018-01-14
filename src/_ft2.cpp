@@ -1,5 +1,6 @@
 #include "_ft2.h"
 #include "_layout.h"
+#include "_sfnt_tables.h"
 
 namespace matplotlib::ft2 {
 
@@ -14,6 +15,7 @@ Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
     }()
   },
   path{path},
+  index{index},
   hinting_factor{hinting_factor}
 {}
 
@@ -134,10 +136,16 @@ encoding.
 )__doc__")
 
     .def_property_readonly(
-      "fname",
+      "path",
       [](Face const& pyface) -> std::string const& { return pyface.path; },
       R"__doc__(
 The path from which the `Face` was loaded.
+)__doc__")
+    .def_property_readonly(
+      "index",
+      [](Face const& pyface) -> FT_Long const& { return pyface.index; },
+      R"__doc__(
+The face index in the font file.
 )__doc__")
 
 #define DECLARE_FIELD(prop) \
@@ -217,12 +225,10 @@ The path from which the `Face` was loaded.
         return FT_Get_Postscript_Name(pyface.ptr.get());
       })
     .def(
-      // NOTE: Actually unused (replaced by get_postscript_name()).
+      // NOTE: Unused by Matplotlib.
       "get_sfnt_name_table",
-      // Don't bother returning a
-      //   std::unordered_map<
-      //     std::tuple<FT_UShort, FT_UShort, FT_UShort, FT_UShort>, py::bytes>
-      // because std::hash is not specialized for tuples...
+      // See also https://www.microsoft.com/typography/otspec/name.htm wrt
+      // encoding.
       [](Face const& pyface) -> py::dict {
         auto face = pyface.ptr.get();
         if (!FT_IS_SFNT(face)) {
@@ -233,9 +239,41 @@ The path from which the `Face` was loaded.
         for (auto i = 0u; i < name_count; ++i) {
           auto sfnt_name = FT_SfntName{};
           FT_CHECK(FT_Get_Sfnt_Name, face, i, &sfnt_name);
-          table[py::make_tuple(sfnt_name.platform_id, sfnt_name.encoding_id,
-                               sfnt_name.language_id, sfnt_name.name_id)]
-            = py::bytes((char*)(sfnt_name.string), sfnt_name.string_len);
+          py::object
+            entry = py::bytes((char*)(sfnt_name.string), sfnt_name.string_len),
+            encoding_id = py::cast(sfnt_name.language_id),
+            language_id = py::cast(sfnt_name.language_id);
+          if (sfnt_name.platform_id == TT_PLATFORM_MACINTOSH) {
+            language_id =
+              py::cast(detail::tt_mac_langids.at(sfnt_name.language_id));
+            if (sfnt_name.encoding_id == TT_MAC_ID_ROMAN) {
+              encoding_id = py::cast("MAC_ROMAN");
+              entry = entry.attr("decode")("mac_roman");
+            }
+          }
+          if (sfnt_name.platform_id == TT_PLATFORM_MICROSOFT) {
+            language_id =
+              py::cast(detail::tt_ms_langids.at(sfnt_name.language_id));
+            if (sfnt_name.encoding_id == TT_MS_ID_UNICODE_CS) {
+              encoding_id = py::cast("MS_UNICODE_CS");
+              entry = entry.attr("decode")("utf-16-be");
+            }
+            if (sfnt_name.encoding_id == TT_MS_ID_SYMBOL_CS) {
+              encoding_id = py::cast("MS_SYMBOL_CS");
+              // Symbols are encoded in the PUA; utf-16-be passes them thru.
+              entry = entry.attr("decode")("utf-16-be");
+            }
+          }
+          py::object name_id =
+            sfnt_name.name_id < detail::tt_name_ids.size()
+            ? py::cast(detail::tt_name_ids[sfnt_name.name_id])
+            // Future expansions or font-specific features.
+            : py::cast(sfnt_name.name_id);
+          table[py::make_tuple(detail::tt_platforms.at(sfnt_name.platform_id),
+                               encoding_id,
+                               language_id,
+                               name_id)]
+            = entry;
         }
         return table;
       }, R"__doc__(

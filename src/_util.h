@@ -6,6 +6,7 @@
 #include FT_GLYPH_H
 #include FT_OUTLINE_H
 #include FT_SFNT_NAMES_H
+#include FT_TRUETYPE_IDS_H
 #include FT_TRUETYPE_TABLES_H
 
 #include <pybind11/pybind11.h>
