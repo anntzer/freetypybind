@@ -258,17 +258,48 @@ The face index in the font file.
             entry = py::bytes((char*)(sfnt_name.string), sfnt_name.string_len),
             encoding_id = py::cast(sfnt_name.language_id),
             language_id = py::cast(sfnt_name.language_id);
+          if (sfnt_name.platform_id == TT_PLATFORM_APPLE_UNICODE) {
+            if (sfnt_name.language_id == 0) {  // Should always be the case.
+              language_id = py::cast("");
+            }
+            entry = entry.attr("decode")("utf-16-be");
+          }
           if (sfnt_name.platform_id == TT_PLATFORM_MACINTOSH) {
-            language_id =
-              py::cast(detail::tt_mac_langids.at(sfnt_name.language_id));
+            if (sfnt_name.language_id < 0x8000) {
+              language_id =
+                py::cast(detail::tt_mac_langids.at(sfnt_name.language_id));
+            } else {
+              auto lang_tag = FT_SfntLangTag{};
+              // Can also fail for 'name' table format 0...
+              if (!FT_Get_Sfnt_LangTag(face, sfnt_name.language_id, &lang_tag)) {
+                language_id =
+                  py::bytes((char*)lang_tag.string, lang_tag.string_len);
+              }
+            }
             if (sfnt_name.encoding_id == TT_MAC_ID_ROMAN) {
               encoding_id = py::cast("MAC_ROMAN");
               entry = entry.attr("decode")("mac_roman");
+            // For other cases, language_id seems better than encoding_id,
+            // which is often set to the same value (fc just fudges it)...
+            } else if (sfnt_name.language_id == TT_MAC_LANGID_JAPANESE) {
+              encoding_id = py::cast("SHIFT_JIS <inferred>");
+              entry = entry.attr("decode")("shift_jis", "backslashreplace");
+            } else if (sfnt_name.language_id == TT_MAC_LANGID_CHINESE_TRADITIONAL) {
+              encoding_id = py::cast("BIG5 <inferred>");
+              entry = entry.attr("decode")("big5", "backslashreplace");
             }
           }
           if (sfnt_name.platform_id == TT_PLATFORM_MICROSOFT) {
-            language_id =
-              py::cast(detail::tt_ms_langids.at(sfnt_name.language_id));
+            if (sfnt_name.language_id < 0x8000) {
+              language_id =
+                py::cast(detail::tt_ms_langids.at(sfnt_name.language_id));
+            } else {
+              auto lang_tag = FT_SfntLangTag{};
+              if (!FT_Get_Sfnt_LangTag(face, sfnt_name.language_id, &lang_tag)) {
+                language_id =
+                  py::bytes((char*)lang_tag.string, lang_tag.string_len);
+              }
+            }
             if (sfnt_name.encoding_id == TT_MS_ID_UNICODE_CS) {
               encoding_id = py::cast("MS_UNICODE_CS");
               entry = entry.attr("decode")("utf-16-be");

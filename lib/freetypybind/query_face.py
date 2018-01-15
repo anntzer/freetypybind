@@ -2,12 +2,19 @@
 
 from enum import IntEnum
 import re
+import warnings
 
 import numpy as np
 
 from . import _ft2
 
 
+# Had to be fixed:
+# BASQUE_SPAIN -> BASQUE_BASQUE
+# CHINESE_MACAU -> CHINESE_MACAO
+# CATALAN_SPAIN -> CATALAN_CATALAN
+# SLOVENE_SLOVENIAN -> SLOVENIAN_SLOVENIA
+# SPANISH_SPAIN_INTERNATIONAL_SORT -> SPANISH_SPAIN_MODERN_SORT
 _language_codes = {
     ("MACINTOSH", 0xffff): "",
     ("MACINTOSH", "ENGLISH"): "en",
@@ -146,12 +153,12 @@ _language_codes = {
     ("MICROSOFT", "ARABIC_BAHRAIN"): "ar",
     ("MICROSOFT", "ARABIC_QATAR"): "ar",
     ("MICROSOFT", "BULGARIAN_BULGARIA"): "bg",
-    ("MICROSOFT", "CATALAN_SPAIN"): "ca",
+    ("MICROSOFT", "CATALAN_CATALAN"): "ca",
     ("MICROSOFT", "CHINESE_TAIWAN"): "zh-tw",
     ("MICROSOFT", "CHINESE_PRC"): "zh-cn",
     ("MICROSOFT", "CHINESE_HONG_KONG"): "zh-hk",
     ("MICROSOFT", "CHINESE_SINGAPORE"): "zh-sg",
-    ("MICROSOFT", "CHINESE_MACAU"): "zh-mo",
+    ("MICROSOFT", "CHINESE_MACAO"): "zh-mo",
     ("MICROSOFT", "CZECH_CZECH_REPUBLIC"): "cs",
     ("MICROSOFT", "DANISH_DENMARK"): "da",
     ("MICROSOFT", "GERMAN_GERMANY"): "de",
@@ -175,7 +182,7 @@ _language_codes = {
     ("MICROSOFT", "ENGLISH_PHILIPPINES"): "en",
     ("MICROSOFT", "SPANISH_SPAIN_TRADITIONAL_SORT"): "es",
     ("MICROSOFT", "SPANISH_MEXICO"): "es",
-    ("MICROSOFT", "SPANISH_SPAIN_INTERNATIONAL_SORT"): "es",
+    ("MICROSOFT", "SPANISH_SPAIN_MODERN_SORT"): "es",
     ("MICROSOFT", "SPANISH_GUATEMALA"): "es",
     ("MICROSOFT", "SPANISH_COSTA_RICA"): "es",
     ("MICROSOFT", "SPANISH_PANAMA"): "es",
@@ -233,7 +240,7 @@ _language_codes = {
     ("MICROSOFT", "INDONESIAN_INDONESIA"): "id",
     ("MICROSOFT", "UKRAINIAN_UKRAINE"): "uk",
     ("MICROSOFT", "BELARUSIAN_BELARUS"): "be",
-    ("MICROSOFT", "SLOVENE_SLOVENIA"): "sl",
+    ("MICROSOFT", "SLOVENIAN_SLOVENIA"): "sl",
     ("MICROSOFT", "ESTONIAN_ESTONIA"): "et",
     ("MICROSOFT", "LATVIAN_LATVIA"): "lv",
     ("MICROSOFT", "LITHUANIAN_LITHUANIA"): "lt",
@@ -244,7 +251,7 @@ _language_codes = {
     ("MICROSOFT", "ARMENIAN_ARMENIA"): "hy",
     ("MICROSOFT", "AZERI_AZERBAIJAN_LATIN"): "az",
     ("MICROSOFT", "AZERI_AZERBAIJAN_CYRILLIC"): "az",
-    ("MICROSOFT", "BASQUE_SPAIN"): "eu",
+    ("MICROSOFT", "BASQUE_BASQUE"): "eu",
     ("MICROSOFT", "SORBIAN_GERMANY"): "wen",
     ("MICROSOFT", "MACEDONIAN_MACEDONIA"): "mk",
     ("MICROSOFT", "SUTU_SOUTH_AFRICA"): "st",
@@ -511,8 +518,15 @@ def query_face(face):
         name_table = {}
         for (platform, encoding, language, name), value \
                 in raw_name_table.items():
+            if isinstance(value, bytes):
+                warnings.warn(
+                    "Skipping undecoded value {} {} {} {}: {}"
+                    .format(platform, encoding, language, name, value))
+                continue  # Don't try to guess Shift-JIS, unlike fc.
             name_table.setdefault((platform, name), {})[
-                encoding, _language_codes[platform, language]] = value
+                # APPLE_UNICODE specifies no language.
+                encoding, _language_codes.get((platform, language), "")] = \
+                value
         name_to_entry = {
             "WWS_FAMILY": "family",
             "TYPOGRAPHIC_FAMILY": "family",
@@ -540,7 +554,8 @@ def query_face(face):
         # Deduplicate family/fullname/style.
         for entry in name_to_entry.values():
             pattern[entry] = list(dict.fromkeys(pattern[entry]))  # Py3.6+.
-    if not pattern["family"] and face.family_name.strip():
+    # family_name can *actually* be None...
+    if not pattern["family"] and face.family_name and face.family_name.strip():
         # fc stores the lang in STYLELANG, seems like a bug?
         pattern["family"] = [("en", face.family_name.strip())]
     # TODO: Variables check skipped.
@@ -585,14 +600,15 @@ def query_face(face):
             pattern.setdefault(
                 "weight",
                 next(weight for regex, weight in Weight.consts
-                     if re.fullmatch(regex, ps_font_info["weight"], re.I)))
+                     if re.fullmatch(
+                         regex, ps_font_info["weight"] or "", re.I)))
         except StopIteration:
             pass
         try:
             pattern.setdefault(
                 "foundry",
                 next(foundry for notice, foundry in _notice_foundries
-                     if notice in ps_font_info["notice"]))
+                     if notice in (ps_font_info["notice"] or "")))
         except StopIteration:
             pass
     # TODO: BDF properties.
