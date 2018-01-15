@@ -345,6 +345,26 @@ _language_codes = {
     ("MICROSOFT", "SOMALI_SOMALIA"): "so",
     ("MICROSOFT", "PAPIAMENTU_NETHERLANDS_ANTILLES"): "pap",
 }
+_notice_foundries = [
+    ("Adobe", "adobe"),
+    ("Bigelow", "b&h"),
+    ("Bitstream", "bitstream"),
+    ("Gnat", "culmus"),
+    ("Iorsh", "culmus"),
+    ("HanYang System", "hanyang"),
+    ("Font21", "hwan"),
+    ("IBM", "ibm"),
+    ("International Typeface Corporation", "itc"),
+    ("Linotype", "linotype"),
+    ("LINOTYPE-HELL", "linotype"),
+    ("Microsoft", "microsoft"),
+    ("Monotype", "monotype"),
+    ("Omega", "omega"),
+    ("Tiro Typeworks", "tiro"),
+    ("URW", "urw"),
+    ("XFree86", "xfree86"),
+    ("Xorg", "xorg"),
+]
 
 
 class Slant(IntEnum):
@@ -475,46 +495,51 @@ def query_face(face):
     pattern["color"] = bool(face.face_flags & _ft2.FACE_FLAG_COLOR)
     pattern["scalable"] = pattern["outline"] or pattern["color"]
     variable = False  # TODO: Multiple masters not supported.
-    os2_t = face.get_sfnt_table("OS/2")
-    head_t = face.get_sfnt_table("head")
-    if (os2_t and os2_t["version"] >= 0x0001 and os2_t["version"] != 0xffff
-            and os2_t["achVendID"]):
-        pattern["foundry"] = os2_t["achVendID"]
-    raw_name_table = face.get_sfnt_name_table()
-    name_table = {}
-    for (platform, encoding, language, name), value in raw_name_table.items():
-        name_table.setdefault((platform, name), {})[
-            encoding, _language_codes[platform, language]] = value
     pattern["family"] = []
     pattern["fullname"] = []
     pattern["style"] = []
-    name_to_entry = {
-        "WWS_FAMILY": "family",
-        "TYPOGRAPHIC_FAMILY": "family",
-        "FONT_FAMILY": "family",
-        "MAC_FULL_NAME": "fullname",
-        "FULL_NAME": "fullname",
-        "WWS_SUBFAMILY": "style",
-        "TYPOGRAPHIC_SUBFAMILY": "style",
-        "FONT_SUBFAMILY": "style",
-    }
-    for platform in _platform_order:
-        for name in _name_order:
-            # TODO: Instances skipped.
-            values = name_table.get((platform, name))
-            if values is None:
-                continue
-            if name in name_to_entry:
-                # fc drops duplicate values even if the language is different,
-                # which seems wrong.
-                for (_, language), value in values.items():
-                    pattern[name_to_entry[name]].append((language, value))
-            elif name in ["TRADEMARK", "MANUFACTURER"]:
-                for _, value in values.items():
-                    pattern.setdefault("foundry", value)
-    # Deduplicate family/fullname/style.
-    for entry in name_to_entry.values():
-        pattern[entry] = list(dict.fromkeys(pattern[entry]))  # Py3.6+.
+    try:
+        os2_t = face.get_sfnt_table("OS/2")
+        head_t = face.get_sfnt_table("head")
+        raw_name_table = face.get_sfnt_name_table()
+    except RuntimeError:  # Not an SFNT font.
+        os2_t = head_t = raw_name_table = None
+    else:
+        if (os2_t and os2_t["version"] >= 0x0001 and os2_t["version"] != 0xffff
+                and os2_t["achVendID"]):
+            pattern["foundry"] = os2_t["achVendID"]
+        name_table = {}
+        for (platform, encoding, language, name), value \
+                in raw_name_table.items():
+            name_table.setdefault((platform, name), {})[
+                encoding, _language_codes[platform, language]] = value
+        name_to_entry = {
+            "WWS_FAMILY": "family",
+            "TYPOGRAPHIC_FAMILY": "family",
+            "FONT_FAMILY": "family",
+            "MAC_FULL_NAME": "fullname",
+            "FULL_NAME": "fullname",
+            "WWS_SUBFAMILY": "style",
+            "TYPOGRAPHIC_SUBFAMILY": "style",
+            "FONT_SUBFAMILY": "style",
+        }
+        for platform in _platform_order:
+            for name in _name_order:
+                # TODO: Instances skipped.
+                values = name_table.get((platform, name))
+                if values is None:
+                    continue
+                if name in name_to_entry:
+                    # fc drops duplicate values even if the language is
+                    # different, which seems wrong.
+                    for (_, language), value in values.items():
+                        pattern[name_to_entry[name]].append((language, value))
+                elif name in ["TRADEMARK", "MANUFACTURER"]:
+                    for _, value in values.items():
+                        pattern.setdefault("foundry", value)
+        # Deduplicate family/fullname/style.
+        for entry in name_to_entry.values():
+            pattern[entry] = list(dict.fromkeys(pattern[entry]))  # Py3.6+.
     if not pattern["family"] and face.family_name.strip():
         # fc stores the lang in STYLELANG, seems like a bug?
         pattern["family"] = [("en", face.family_name.strip())]
@@ -530,7 +555,7 @@ def query_face(face):
     pattern["file"] = face.path
     pattern["index"] = face.index
     pattern["fontversion"] = head_t["Font_Revision"] if head_t else 0
-    # TODO: Codepages.
+    # TODO: Check for multiple "exclusive" languages.
     if os2_t and os2_t["version"] != 0xffff:
         pattern["weight"] = Weight.from_opentype(os2_t["usWeightClass"])
         # TODO: Multiply by MM width multiplier (after conversion).
@@ -547,15 +572,33 @@ def query_face(face):
         }[os2_t["usWidthClass"]]
     # TODO: Font capabilities.
     # TODO: Optical sizes.
-    # TODO: PS font info.
+    try:
+        ps_font_info = face.get_ps_font_info()
+    except RuntimeError:
+        pass
+    else:
+        try:
+            pattern.setdefault(
+                "weight",
+                next(weight for regex, weight in Weight.consts
+                     if re.fullmatch(regex, ps_font_info["weight"], re.I)))
+        except StopIteration:
+            pass
+        try:
+            pattern.setdefault(
+                "foundry",
+                next(foundry for notice, foundry in _notice_foundries
+                     if notice in ps_font_info["notice"]))
+        except StopIteration:
+            pass
     # TODO: BDF properties.
     for _, style in pattern["style"]:
         for prop, enum in [("weight", Weight), ("width", Width),
                            ("slant", Slant), ("decorative", Decorative)]:
             try:
                 pattern.setdefault(
-                    prop, next(weight for regex, weight in Weight.consts
-                               if re.search(regex, style)))
+                    prop, next(value for regex, value in enum.consts
+                               if re.search(regex, style, re.I)))
             except StopIteration:
                 pass
     pattern.setdefault(

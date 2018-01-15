@@ -6,7 +6,7 @@ namespace matplotlib::ft2 {
 
 Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
   ptr{
-    [&]() -> std::shared_ptr<FT_FaceRec_> {
+    [&]() -> std::shared_ptr<FT_FaceRec> {
       auto face = FT_Face{};
       FT_CHECK(FT_New_Face, library, path.data(), index, &face);
       auto transform = FT_Matrix{FT_Fixed(65536 / hinting_factor), 0, 0, 65536};
@@ -21,7 +21,7 @@ Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
 
 Glyph::Glyph(FT_Face const& face, double hinting_factor) :
   ptr{
-    [&]() -> std::shared_ptr<FT_GlyphRec_> {
+    [&]() -> std::shared_ptr<FT_GlyphRec> {
       auto glyph = FT_Glyph{};
       FT_CHECK(FT_Get_Glyph, face->glyph, &glyph);
       return {glyph, FT_Done_Glyph};
@@ -355,10 +355,28 @@ keys to the corresponding 'name' bytestrings.
           COPY_FIELD(yStrikeoutPosition);
           COPY_FIELD(sFamilyClass);
           table["panose"] = py::bytes((char*)(ptr->panose), 10);
-          COPY_FIELD(ulUnicodeRange1);
-          COPY_FIELD(ulUnicodeRange2);
-          COPY_FIELD(ulUnicodeRange3);
-          COPY_FIELD(ulUnicodeRange4);
+          auto unicode_range = std::vector<uint8_t>{};
+          for (auto i = 0; i < 32; ++i) {
+            if ((ptr->ulUnicodeRange1 >> i) & 1) {
+              unicode_range.push_back(i);
+            }
+          }
+          for (auto i = 0; i < 32; ++i) {
+            if ((ptr->ulUnicodeRange2 >> i) & 1) {
+              unicode_range.push_back(i + 32);
+            }
+          }
+          for (auto i = 0; i < 32; ++i) {
+            if ((ptr->ulUnicodeRange3 >> i) & 1) {
+              unicode_range.push_back(i + 64);
+            }
+          }
+          for (auto i = 0; i < 32; ++i) {
+            if ((ptr->ulUnicodeRange4 >> i) & 1) {
+              unicode_range.push_back(i + 96);
+            }
+          }
+          table["unicodeRange"] = unicode_range;
           table["achVendID"] =
             // Technically a key into a registry of vendors; all values so far
             // are ASCII.
@@ -452,6 +470,25 @@ keys to the corresponding 'name' bytestrings.
         } else {
           throw std::runtime_error("Invalid SFNT table");
         }
+#undef COPY_FIELD
+        return table;
+      })
+    .def(
+      "get_ps_font_info",
+      [](Face const& pyface) -> py::dict {
+        auto psfontinfo = PS_FontInfoRec{};
+        FT_CHECK(FT_Get_PS_Font_Info, pyface.ptr.get(), &psfontinfo);
+        auto table = py::dict{};
+ #define COPY_FIELD(field) table[#field] = psfontinfo.field
+        COPY_FIELD(version);
+        COPY_FIELD(notice);
+        COPY_FIELD(full_name);
+        COPY_FIELD(family_name);
+        COPY_FIELD(weight);
+        COPY_FIELD(italic_angle);
+        COPY_FIELD(is_fixed_pitch);
+        COPY_FIELD(underline_position);
+        COPY_FIELD(underline_thickness);
 #undef COPY_FIELD
         return table;
       })
