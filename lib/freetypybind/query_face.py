@@ -577,18 +577,21 @@ def query_face(face):
     # TODO: Check for multiple "exclusive" languages.
     if os2_t and os2_t["version"] != 0xffff:
         pattern["weight"] = Weight.from_opentype(os2_t["usWeightClass"])
-        # TODO: Multiply by MM width multiplier (after conversion).
-        pattern["width"] = {
-            1: Width.Ultracondensed,
-            2: Width.Extracondensed,
-            3: Width.Condensed,
-            4: Width.Semicondensed,
-            5: Width.Normal,
-            6: Width.Semiexpanded,
-            7: Width.Expanded,
-            8: Width.Extraexpanded,
-            9: Width.Ultraexpanded,
-        }[os2_t["usWidthClass"]]
+        try:
+            # TODO: Multiply by MM width multiplier (after conversion).
+            pattern["width"] = {
+                1: Width.Ultracondensed,
+                2: Width.Extracondensed,
+                3: Width.Condensed,
+                4: Width.Semicondensed,
+                5: Width.Normal,
+                6: Width.Semiexpanded,
+                7: Width.Expanded,
+                8: Width.Extraexpanded,
+                9: Width.Ultraexpanded,
+            }[round(os2_t["usWidthClass"])]
+        except KeyError:
+            pass
     # TODO: Font capabilities.
     # TODO: Optical sizes.
     try:

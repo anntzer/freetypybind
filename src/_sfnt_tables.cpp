@@ -2,7 +2,7 @@
 
 namespace matplotlib::ft2::detail {
 
-std::array<std::string, 7> const tt_platforms = {{
+decltype(tt_platforms) tt_platforms{{
   "APPLE_UNICODE",
   "MACINTOSH",
   "ISO",
@@ -11,7 +11,7 @@ std::array<std::string, 7> const tt_platforms = {{
   "ADOBE",
 }};
 
-std::array<std::string, 150> const tt_mac_langids = {{
+decltype(tt_mac_langids) tt_mac_langids{{
   "ENGLISH",
   "FRENCH",
   "GERMAN",
@@ -134,7 +134,7 @@ std::array<std::string, 150> const tt_mac_langids = {{
   "AZERBAIJANI_ROMAN_SCRIPT",
 }};
 
-std::map<uint32_t, std::string> const tt_ms_langids = {
+decltype(tt_ms_langids) tt_ms_langids{
   {0x0401, "ARABIC_SAUDI_ARABIA"},
   {0x0801, "ARABIC_IRAQ"},
   {0x0C01, "ARABIC_EGYPT"},
@@ -396,7 +396,7 @@ std::map<uint32_t, std::string> const tt_ms_langids = {
   {0x0479, "PAPIAMENTU_NETHERLANDS_ANTILLES"}
 };
 
-std::array<std::string, 26> const tt_name_ids = {{
+decltype(tt_name_ids) tt_name_ids{{
   "COPYRIGHT",
   "FONT_FAMILY",
   "FONT_SUBFAMILY",
