@@ -158,6 +158,22 @@ The face index in the font file.
     DECLARE_FIELD(family_name)
     DECLARE_FIELD(style_name)
     DECLARE_FIELD(num_fixed_sizes)
+    .def_property_readonly(
+      "available_sizes",
+      [](Face const& pyface) -> std::vector<py::dict> {
+        auto sizes = std::vector<py::dict>{};
+        for (auto i = 0; i < pyface.ptr->num_fixed_sizes; ++i) {
+          auto c_size = pyface.ptr->available_sizes[i];
+          auto size = py::dict{};
+          size["height"] = c_size.height;
+          size["width"] = c_size.width;
+          size["size"] = c_size.size;
+          size["x_ppem"] = c_size.x_ppem / 64.;
+          size["y_ppem"] = c_size.y_ppem / 64.;
+          sizes.push_back(size);
+        }
+        return sizes;
+      })
     // available_sizes -> not supported.
     DECLARE_FIELD(num_charmaps)
     // charmaps -> not supported.

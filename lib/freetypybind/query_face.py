@@ -548,10 +548,14 @@ def query_face(face):
         pattern["style"] = [("en", face.style_name.strip())]
     if not pattern["family"]:
         pattern["family"] = [("", face.path.rsplit("/", 1)[-1].rsplit(".")[0])]
-    pattern["postscriptname"] = (
-        face.get_postscript_name()
-        or pattern["family"].get("en", "")[:255]
-           .replace("\x04()/<>[]{}\t\f\r\n ", "-"))
+    try:
+        pattern["postscriptname"] = (
+            face.get_postscript_name()
+            or next(family for language, family in pattern["family"]
+                    if language == "en")[:255]
+               .translate({ord(c): "-" for c in "\x04()/<>[]{}\t\f\r\n "}))
+    except StopIteration:
+        pass
     pattern["file"] = face.path
     pattern["index"] = face.index
     pattern["fontversion"] = head_t["Font_Revision"] if head_t else 0
@@ -613,6 +617,10 @@ def query_face(face):
     pattern.setdefault("foundry", "unknown")
     # TODO: Unicode coverage.
     # TODO: Spacing.
-    # TODO: Pixel size & antialias.
+    if not face.face_flags & _ft2.FACE_FLAG_SCALABLE:
+        pattern["antialias"] = False
+        # TODO: BDF properties.
+        pattern["pixel_size"] = [size["y_ppem"]
+                                 for size in face.available_sizes]
     pattern["fontformat"] = face.get_font_format()
     return pattern
