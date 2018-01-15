@@ -225,7 +225,6 @@ The face index in the font file.
         return FT_Get_Postscript_Name(pyface.ptr.get());
       })
     .def(
-      // NOTE: Unused by Matplotlib.
       "get_sfnt_name_table",
       // See also https://www.microsoft.com/typography/otspec/name.htm wrt
       // encoding.
@@ -360,7 +359,10 @@ keys to the corresponding 'name' bytestrings.
           COPY_FIELD(ulUnicodeRange2);
           COPY_FIELD(ulUnicodeRange3);
           COPY_FIELD(ulUnicodeRange4);
-          table["achVendID"] = py::bytes((char*)(ptr->achVendID), 4);
+          table["achVendID"] =
+            // Technically a key into a registry of vendors; all values so far
+            // are ASCII.
+            py::bytes((char*)(ptr->achVendID), 4).attr("decode")("latin-1");
           COPY_FIELD(fsSelection);
           COPY_FIELD(usFirstCharIndex);
           COPY_FIELD(usLastCharIndex);
