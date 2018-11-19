@@ -5,14 +5,15 @@ import freetypybind as ft
 import freetypybind.query_face
 
 
-def names(path: str):
+def names(path: str, *, keys_only: bool = False):
     face = ft.Face(os.fsencode(path), 0)
     for face_index in range(face.num_faces):
         face = ft.Face(os.fsencode(path), face_index)
         for key, value in face.get_sfnt_name_table().items():
-            print()
-            print(*key)
-            print(value)
+            if keys_only:
+                print(*key)
+            else:
+                print("\n{}\n{}".format(" ".join(map(str, key)), value))
 
 
 def query(path: str):
