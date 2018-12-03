@@ -15,6 +15,13 @@ struct Face {
   Face(std::string const& path, FT_Long index, double hinting_factor);
 };
 
+struct CharMap {
+  py::object const face;  // Simplify lifetime issues.
+  FT_Int const index;
+
+  CharMap(Face const& face, FT_Int index);
+};
+
 struct Glyph {
   std::shared_ptr<FT_GlyphRec_> const ptr;
 

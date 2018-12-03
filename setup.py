@@ -21,7 +21,8 @@ EXTENSION = Extension(
     include_dirs=
         [get_pybind_include(), get_pybind_include(user=True)],
     extra_compile_args=
-        ["-std=c++1z", "-Wextra", "-Wpedantic"]
+        ["-std=c++1z", "-fvisibility=hidden", "-flto",
+         "-Wall", "-Wextra", "-Wpedantic"]
         + get_pkg_config("--cflags", "freetype2"),
     extra_link_args=
         get_pkg_config("--libs", "freetype2"),

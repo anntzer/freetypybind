@@ -19,6 +19,11 @@ Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
   hinting_factor{hinting_factor}
 {}
 
+CharMap::CharMap(Face const& face, FT_Int index) :
+  face{py::cast(face)},
+  index{index}
+{}
+
 Glyph::Glyph(FT_Face const& face, double hinting_factor) :
   ptr{
     [&]() -> std::shared_ptr<FT_GlyphRec> {
@@ -36,6 +41,7 @@ Glyph::Glyph(FT_Face const& face, double hinting_factor) :
 PYBIND11_MODULE(_ft2, m)
 {
   using namespace pybind11::literals;
+  using namespace std::string_literals;
 
   m.doc() = R"__doc__(
 A wrapper extension module for FreeType2.
@@ -102,13 +108,22 @@ case is explicitly mentioned where applicable.
   DECLARE_FLAG(STYLE_FLAG_BOLD);
 #undef DECLARE_FLAG
 
-  py::enum_<FT_Glyph_BBox_Mode>(m, "GlyphBbox")
-#define DECLARE_ENUM(name) .value(#name, FT_GLYPH_BBOX_##name)
-  DECLARE_ENUM(UNSCALED)
-  DECLARE_ENUM(SUBPIXELS)
-  DECLARE_ENUM(GRIDFIT)
-  DECLARE_ENUM(TRUNCATE)
-  DECLARE_ENUM(PIXELS);
+  py::enum_<FT_Encoding>(m, "Encoding")
+#define DECLARE_ENUM(name) .value(#name, FT_ENCODING_##name)
+  DECLARE_ENUM(NONE)
+  DECLARE_ENUM(MS_SYMBOL)
+  DECLARE_ENUM(UNICODE)
+  DECLARE_ENUM(SJIS)
+  DECLARE_ENUM(PRC)
+  DECLARE_ENUM(BIG5)
+  DECLARE_ENUM(WANSUNG)
+  DECLARE_ENUM(JOHAB)
+  DECLARE_ENUM(ADOBE_STANDARD)
+  DECLARE_ENUM(ADOBE_EXPERT)
+  DECLARE_ENUM(ADOBE_CUSTOM)
+  DECLARE_ENUM(ADOBE_LATIN_1)
+  DECLARE_ENUM(OLD_LATIN_2)
+  DECLARE_ENUM(APPLE_ROMAN);
 #undef DECLARE_ENUM
 
   py::enum_<FT_Kerning_Mode>(m, "Kerning")
@@ -116,6 +131,15 @@ case is explicitly mentioned where applicable.
   DECLARE_ENUM(DEFAULT)
   DECLARE_ENUM(UNFITTED)
   DECLARE_ENUM(UNSCALED);
+#undef DECLARE_ENUM
+
+  py::enum_<FT_Glyph_BBox_Mode>(m, "GlyphBbox")
+#define DECLARE_ENUM(name) .value(#name, FT_GLYPH_BBOX_##name)
+  DECLARE_ENUM(UNSCALED)
+  DECLARE_ENUM(SUBPIXELS)
+  DECLARE_ENUM(GRIDFIT)
+  DECLARE_ENUM(TRUNCATE)
+  DECLARE_ENUM(PIXELS);
 #undef DECLARE_ENUM
 
   py::class_<Face>(m, "Face", R"__doc__(
@@ -176,7 +200,15 @@ The face index in the font file.
       })
     // available_sizes -> not supported.
     DECLARE_FIELD(num_charmaps)
-    // charmaps -> not supported.
+    .def_property_readonly(
+      "charmaps",
+      [](Face& pyface) -> std::vector<CharMap> {
+        auto charmaps = std::vector<CharMap>{};
+        for (auto i = 0; i < pyface.ptr->num_charmaps; ++i) {
+          charmaps.emplace_back(pyface, i);
+        }
+        return charmaps;
+      })
     // generic -> not supported.
     .def_property_readonly(
       "bbox",
@@ -236,9 +268,32 @@ The face index in the font file.
       },
       "left"_a, "right"_a, "mode"_a)
     .def(
+      "get_glyph_names",
+      [](Face const& pyface) -> std::vector<std::tuple<FT_ULong, FT_UInt, std::string>> {
+        auto face = pyface.ptr.get();
+        auto names = std::vector<std::tuple<FT_ULong, FT_UInt, std::string>>{};
+        auto index = FT_UInt{};
+        auto charcode = FT_Get_First_Char(face, &index);
+        while (index) {
+          char buffer[64];  // AFDKO Feature File Specification;
+          FT_CHECK(FT_Get_Glyph_Name, face, index, buffer, 64);
+          names.emplace_back(charcode, index, buffer);
+          charcode = FT_Get_Next_Char(face, charcode, &index);
+        }
+        return names;
+      })
+    .def(
       "get_postscript_name",
       [](Face const& pyface) -> char const* {
         return FT_Get_Postscript_Name(pyface.ptr.get());
+      })
+    .def(
+      "set_charmap",
+      [](Face const& pyface, CharMap const& pycharmap) -> void {
+        FT_CHECK(
+          FT_Set_Charmap,
+          pyface.ptr.get(),
+          pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index])
       })
     .def(
       "get_sfnt_name_table",
@@ -636,8 +691,44 @@ keys to the corresponding 'name' bytestrings.
       [](Face const& pyface) -> std::string {
         // NOTE Deprecated & renamed to FT_Get_Font_Format in FreeType 2.6.
         return FT_Get_X11_Font_Format(pyface.ptr.get());
+      });
+
+  py::class_<CharMap>(m, "CharMap", R"__doc__(
+A lightweight wrapper around a ``FT_CharMap``.
+)__doc__")
+    .def(
+      "__repr__",
+      [](CharMap const& pycharmap) -> std::string {
+        auto charmap = pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index];
+        return
+          "<CharMap "s +
+          "encoding="s + py::str(py::cast(charmap->encoding)).cast<std::string>() + ", "s +
+          "platform_id='"s + detail::tt_platforms.at(charmap->platform_id) + "', "s +
+          "encoding_id="s + std::to_string(charmap->encoding_id) +
+          ">"s;
       })
-    ;
+    .def_property_readonly(
+      "face",
+      [](CharMap const& pycharmap) -> py::object {
+        return pycharmap.face;
+      })
+    .def_property_readonly(
+      "encoding",
+      [](CharMap const& pycharmap) -> FT_Encoding {
+        return pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index]->encoding;
+      })
+    .def_property_readonly(
+      "platform_id",
+      [](CharMap const& pycharmap) -> std::string {
+        return
+          detail::tt_platforms.at(
+            pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index]->platform_id);
+      })
+    .def_property_readonly(
+      "encoding_id",
+      [](CharMap const& pycharmap) -> FT_UShort {
+        return pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index]->encoding_id;
+      });
 
   py::class_<Glyph>(m, "Glyph", R"__doc__(
 A lightweight wrapper around a ``FT_Glyph``.

@@ -2,14 +2,14 @@
 
 namespace matplotlib::ft2::detail {
 
-decltype(tt_platforms) tt_platforms{{
-  "APPLE_UNICODE",
-  "MACINTOSH",
-  "ISO",
-  "MICROSOFT",
-  "CUSTOM",
-  "ADOBE",
-}};
+decltype(tt_platforms) tt_platforms{
+  {0, "APPLE_UNICODE"},
+  {1, "MACINTOSH"},
+  {2, "ISO"},
+  {3, "MICROSOFT"},
+  {4, "CUSTOM"},
+  {7, "ADOBE"}
+};
 
 decltype(tt_mac_langids) tt_mac_langids{{
   "ENGLISH",
