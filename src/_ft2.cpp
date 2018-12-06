@@ -461,12 +461,24 @@ keys to the corresponding 'name' bytestrings.
     .def(
       "get_sfnt_table",
       [](Face const& pyface, std::string tag) -> std::optional<py::dict> {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstrict-aliasing"
+#define COPY_FIELD(field) { \
+    using type = decltype(ptr->field); \
+    if constexpr (std::is_array_v<type>) { \
+      table[#field] = \
+        *reinterpret_cast< \
+          std::array<std::remove_extent_t<type>, std::extent_v<type>>*>( \
+            &ptr->field); \
+    } else { \
+      table[#field] = ptr->field; \
+    } \
+  }
         auto face = pyface.ptr.get();
         if (!FT_IS_SFNT(face)) {
           throw std::runtime_error("Font not using the SFNT storage scheme");
         }
         auto table = py::dict{};
-#define COPY_FIELD(field) table[#field] = ptr->field
         if (tag == "head") {
           auto ptr =
             static_cast<TT_Header*>(FT_Get_Sfnt_Table(face, FT_SFNT_HEAD));
@@ -479,8 +491,8 @@ keys to the corresponding 'name' bytestrings.
           COPY_FIELD(Magic_Number);
           COPY_FIELD(Flags);
           COPY_FIELD(Units_Per_EM);
-          table["Created"] = py::make_tuple(ptr->Created[0], ptr->Created[1]);
-          table["Modified"] = py::make_tuple(ptr->Modified[0], ptr->Modified[1]);
+          COPY_FIELD(Created);
+          COPY_FIELD(Modified);
           COPY_FIELD(xMin);
           COPY_FIELD(yMin);
           COPY_FIELD(xMax);
@@ -647,16 +659,15 @@ keys to the corresponding 'name' bytestrings.
         } else {
           throw std::runtime_error("Invalid SFNT table");
         }
-#undef COPY_FIELD
         return table;
       })
     .def(
       "get_ps_font_info",
       [](Face const& pyface) -> py::dict {
         auto psfontinfo = PS_FontInfoRec{};
-        FT_CHECK(FT_Get_PS_Font_Info, pyface.ptr.get(), &psfontinfo);
+        auto ptr = &psfontinfo;
+        FT_CHECK(FT_Get_PS_Font_Info, pyface.ptr.get(), ptr);
         auto table = py::dict{};
- #define COPY_FIELD(field) table[#field] = psfontinfo.field
         COPY_FIELD(version);
         COPY_FIELD(notice);
         COPY_FIELD(full_name);
@@ -666,8 +677,43 @@ keys to the corresponding 'name' bytestrings.
         COPY_FIELD(is_fixed_pitch);
         COPY_FIELD(underline_position);
         COPY_FIELD(underline_thickness);
-#undef COPY_FIELD
         return table;
+      })
+    .def(
+      "get_ps_font_private",
+      [](Face const& pyface) -> py::dict {
+        auto psfontprivate = PS_PrivateRec{};
+        auto ptr = &psfontprivate;
+        FT_CHECK(FT_Get_PS_Font_Private, pyface.ptr.get(), ptr);
+        auto table = py::dict{};
+        COPY_FIELD(unique_id);
+        COPY_FIELD(lenIV);
+        COPY_FIELD(num_blue_values);
+        COPY_FIELD(num_other_blues);
+        COPY_FIELD(num_family_blues);
+        COPY_FIELD(num_family_other_blues);
+        COPY_FIELD(blue_values);
+        COPY_FIELD(other_blues);
+        COPY_FIELD(family_blues);
+        COPY_FIELD(family_other_blues);
+        table["blue_scale"] = psfontprivate.blue_scale / 65536.;
+        COPY_FIELD(blue_shift);
+        COPY_FIELD(blue_fuzz);
+        COPY_FIELD(standard_width);
+        COPY_FIELD(standard_height);
+        COPY_FIELD(num_snap_widths);
+        COPY_FIELD(num_snap_heights);
+        COPY_FIELD(force_bold);
+        COPY_FIELD(round_stem_up);
+        COPY_FIELD(snap_widths);
+        COPY_FIELD(snap_heights);
+        table["expansion_factor"] = psfontprivate.expansion_factor / 65536.;
+        COPY_FIELD(language_group);
+        COPY_FIELD(password);
+        COPY_FIELD(min_feature);
+        return table;
+#pragma GCC diagnostic pop
+#undef COPY_FIELD
       })
     .def(
       "load_char",
@@ -739,7 +785,7 @@ glyph slot with `Face.load_char`, then access the face's `glyph` property
 
 This class exposes the attributes of the original glyph slot and its glyph
 metrics.  Length attibutes are in pixels (this module handles conversion from
-26.6 and 16.6 fixed point formats internally).
+26.6 and 16.16 fixed point formats internally).
 )__doc__")
     .def_property_readonly(
       "width",
