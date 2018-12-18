@@ -232,6 +232,15 @@ The face index in the font file.
     // size -> set_char_size.
     // charmap -> not supported.
 #undef DECLARE_FIELD
+
+    .def(
+      "attach_file",
+      [](Face const& pyface, py::bytes path) -> void {
+        FT_CHECK(
+          FT_Attach_File, pyface.ptr.get(), path.cast<std::string>().data());
+      },
+      "path"_a)
+
     .def(
       "get_char_index",
       [](Face const& pyface, FT_ULong codepoint) -> FT_UInt {
