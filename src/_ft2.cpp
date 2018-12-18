@@ -150,8 +150,15 @@ units.
 )__doc__")
     .def(
       py::init(
-        [](py::bytes path, FT_Long index, double hinting_factor) -> Face* {
-          return new Face{path, index, hinting_factor};
+        [](py::object path, FT_Long index, double hinting_factor) -> Face* {
+          PyBytesObject* path_bytes = nullptr;
+          PY_CHECK(PyUnicode_FSConverter, path.ptr(), &path_bytes);
+          auto path_bytes_11 =  // For cleanup.
+            py::reinterpret_steal<py::bytes>(
+              reinterpret_cast<PyObject*>(path_bytes));
+          return new Face{
+            PY_CHECK(PyBytes_AsString, path_bytes_11.ptr()),
+            index, hinting_factor};
         }),
       "path"_a, "index"_a, "hinting_factor"_a=1,
       R"__doc__(

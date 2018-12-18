@@ -9,7 +9,7 @@ Use
 .. code-block:: python
 
    import freetypybind as ft
-   face = ft.Face(b"/path/to/font", index=0)
+   face = ft.Face("/path/to/font", index=0)
    face.set_char_size(pt_size=12, dpi=100)
    bitmap = ft.Layout.simple("hello, world", face, ft.LOAD_RENDER)
 
