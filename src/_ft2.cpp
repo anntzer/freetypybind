@@ -9,7 +9,8 @@ Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
     [&]() -> std::shared_ptr<FT_FaceRec> {
       auto face = FT_Face{};
       FT_CHECK(FT_New_Face, library, path.data(), index, &face);
-      auto transform = FT_Matrix{FT_Fixed(65536 / hinting_factor), 0, 0, 65536};
+      auto transform = FT_Matrix{
+        FT_Fixed(65536. / hinting_factor), 0, 0, 65536};
       FT_Set_Transform(face, &transform, nullptr);
       return {face, FT_Done_Face};
     }()
@@ -205,7 +206,6 @@ The face index in the font file.
         }
         return sizes;
       })
-    // available_sizes -> not supported.
     DECLARE_FIELD(num_charmaps)
     .def_property_readonly(
       "charmaps",
@@ -236,7 +236,20 @@ The face index in the font file.
       [](Face const& pyface) -> Glyph {
         return {pyface.ptr.get(), pyface.hinting_factor};
       })
-    // size -> set_char_size.
+    .def_property_readonly(
+      "size",
+      [](Face const& pyface) -> py::dict {
+        auto metrics = pyface.ptr->size->metrics;
+        return py::dict(
+          "x_ppem"_a=metrics.x_ppem,
+          "y_ppem"_a=metrics.y_ppem,
+          "x_scale"_a=metrics.x_scale / 65536. / 64.,
+          "y_scale"_a=metrics.y_scale / 65536. / 64.,
+          "ascender"_a=metrics.ascender / 64.,
+          "descender"_a=metrics.descender / 64.,
+          "height"_a=metrics.height / 64.,
+          "max_advance"_a=metrics.max_advance / 64.);
+      })
     // charmap -> not supported.
 #undef DECLARE_FIELD
 
@@ -744,7 +757,7 @@ keys to the corresponding 'name' bytestrings.
         FT_CHECK(FT_Set_Char_Size,
                  face, pt_size * 64, 0, dpi * pyface.hinting_factor, dpi);
         auto transform =
-          FT_Matrix{FT_Fixed(65536 / pyface.hinting_factor), 0, 0, 65536};
+          FT_Matrix{FT_Fixed(65536. / pyface.hinting_factor), 0, 0, 65536};
         FT_Set_Transform(face, &transform, nullptr);
       },
       "pt_size"_a, "dpi"_a)
