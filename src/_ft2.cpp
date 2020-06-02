@@ -751,6 +751,12 @@ keys to the corresponding 'name' bytestrings.
       },
       "codepoint"_a, "flags"_a)
     .def(
+      "load_glyph",
+      [](Face const& pyface, FT_UInt glyph_index, FT_Int32 flags) -> void {
+        FT_CHECK(FT_Load_Glyph, pyface.ptr.get(), glyph_index, flags);
+      },
+      "glyph_index"_a, "flags"_a)
+    .def(
       "set_char_size",
       [](Face const& pyface, double pt_size, double dpi) -> void {
         auto face = pyface.ptr.get();
@@ -809,8 +815,8 @@ A lightweight wrapper around a ``FT_CharMap``.
 A lightweight wrapper around a ``FT_Glyph``.
 
 This object cannot be constructed directly.  Instead, load a glyph in a face's
-glyph slot with `Face.load_char`, then access the face's `glyph` property
-(which calls ``FT_Get_Glyph``).
+glyph slot with `Face.load_char` or `Face.load_glyph`, then access the face's
+`glyph` property (which calls ``FT_Get_Glyph``).
 
 This class exposes the attributes of the original glyph slot and its glyph
 metrics.  Length attibutes are in pixels (this module handles conversion from
