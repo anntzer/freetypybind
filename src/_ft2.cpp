@@ -250,7 +250,15 @@ The face index in the font file.
           "height"_a=metrics.height / 64.,
           "max_advance"_a=metrics.max_advance / 64.);
       })
-    // charmap -> not supported.
+    .def_property_readonly(
+      "charmap",
+      [](Face& pyface) -> CharMap {
+        auto idx = FT_Get_Charmap_Index(pyface.ptr->charmap);
+        if (idx == -1) {
+          throw std::runtime_error("Failed to retrieve charmap index");
+        }
+        return {pyface, idx};
+      })
 #undef DECLARE_FIELD
 
     .def(
