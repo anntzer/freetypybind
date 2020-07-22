@@ -277,13 +277,33 @@ The face index in the font file.
           FT_Attach_File, pyface.ptr.get(), path.cast<std::string>().data());
       },
       "path"_a)
-
     .def(
       "get_char_index",
       [](Face const& pyface, FT_ULong codepoint) -> FT_UInt {
         return FT_Get_Char_Index(pyface.ptr.get(), codepoint);
       },
       "codepoint"_a)
+    .def(  // Only one glyph per codepoint is listed, not (e.g.) variants!
+      "_get_chars",
+      [](Face const& pyface) -> std::vector<std::tuple<FT_ULong, FT_UInt, std::string>> {
+        auto face = pyface.ptr.get();
+        auto names = std::vector<std::tuple<FT_ULong, FT_UInt, std::string>>{};
+        auto index = FT_UInt{};
+        auto charcode = FT_Get_First_Char(face, &index);
+        while (index) {
+          char buffer[64];  // AFDKO Feature File Specification;
+          FT_CHECK(FT_Get_Glyph_Name, face, index, buffer, 64);
+          names.emplace_back(charcode, index, buffer);
+          charcode = FT_Get_Next_Char(face, charcode, &index);
+        }
+        return names;
+      })
+    .def(
+      "get_font_format",
+      [](Face const& pyface) -> std::string {
+        // NOTE Deprecated & renamed to FT_Get_Font_Format in FreeType 2.6.
+        return FT_Get_X11_Font_Format(pyface.ptr.get());
+      })
     .def(
       "get_glyph_name",
       [](Face const& pyface, FT_UInt index) -> std::string {
@@ -314,21 +334,6 @@ The face index in the font file.
       },
       "left"_a, "right"_a, "mode"_a)
     .def(
-      "get_glyph_names",
-      [](Face const& pyface) -> std::vector<std::tuple<FT_ULong, FT_UInt, std::string>> {
-        auto face = pyface.ptr.get();
-        auto names = std::vector<std::tuple<FT_ULong, FT_UInt, std::string>>{};
-        auto index = FT_UInt{};
-        auto charcode = FT_Get_First_Char(face, &index);
-        while (index) {
-          char buffer[64];  // AFDKO Feature File Specification;
-          FT_CHECK(FT_Get_Glyph_Name, face, index, buffer, 64);
-          names.emplace_back(charcode, index, buffer);
-          charcode = FT_Get_Next_Char(face, charcode, &index);
-        }
-        return names;
-      })
-    .def(
       "get_name_index",
       [](Face const& pyface, std::string glyph_name) -> FT_UInt {
         return FT_Get_Name_Index(pyface.ptr.get(), glyph_name.data());
@@ -338,13 +343,68 @@ The face index in the font file.
       [](Face const& pyface) -> char const* {
         return FT_Get_Postscript_Name(pyface.ptr.get());
       })
+#define COPY_FIELD(field) { \
+    using type = decltype(ptr->field); \
+    if constexpr (std::is_array_v<type>) { \
+      table[#field] = \
+        *std::launder(reinterpret_cast< \
+          std::array<std::remove_extent_t<type>, std::extent_v<type>>*>( \
+            &ptr->field)); \
+    } else { \
+      table[#field] = ptr->field; \
+    } \
+  }
     .def(
-      "set_charmap",
-      [](Face const& pyface, CharMap const& pycharmap) -> void {
-        FT_CHECK(
-          FT_Set_Charmap,
-          pyface.ptr.get(),
-          pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index])
+      "get_ps_font_info",
+      [](Face const& pyface) -> py::dict {
+        auto psfontinfo = PS_FontInfoRec{};
+        auto ptr = &psfontinfo;
+        FT_CHECK(FT_Get_PS_Font_Info, pyface.ptr.get(), ptr);
+        auto table = py::dict{};
+        COPY_FIELD(version);
+        COPY_FIELD(notice);
+        COPY_FIELD(full_name);
+        COPY_FIELD(family_name);
+        COPY_FIELD(weight);
+        COPY_FIELD(italic_angle);
+        COPY_FIELD(is_fixed_pitch);
+        COPY_FIELD(underline_position);
+        COPY_FIELD(underline_thickness);
+        return table;
+      })
+    .def(
+      "get_ps_font_private",
+      [](Face const& pyface) -> py::dict {
+        auto psfontprivate = PS_PrivateRec{};
+        auto ptr = &psfontprivate;
+        FT_CHECK(FT_Get_PS_Font_Private, pyface.ptr.get(), ptr);
+        auto table = py::dict{};
+        COPY_FIELD(unique_id);
+        COPY_FIELD(lenIV);
+        COPY_FIELD(num_blue_values);
+        COPY_FIELD(num_other_blues);
+        COPY_FIELD(num_family_blues);
+        COPY_FIELD(num_family_other_blues);
+        COPY_FIELD(blue_values);
+        COPY_FIELD(other_blues);
+        COPY_FIELD(family_blues);
+        COPY_FIELD(family_other_blues);
+        table["blue_scale"] = psfontprivate.blue_scale / 65536.;
+        COPY_FIELD(blue_shift);
+        COPY_FIELD(blue_fuzz);
+        COPY_FIELD(standard_width);
+        COPY_FIELD(standard_height);
+        COPY_FIELD(num_snap_widths);
+        COPY_FIELD(num_snap_heights);
+        COPY_FIELD(force_bold);
+        COPY_FIELD(round_stem_up);
+        COPY_FIELD(snap_widths);
+        COPY_FIELD(snap_heights);
+        table["expansion_factor"] = psfontprivate.expansion_factor / 65536.;
+        COPY_FIELD(language_group);
+        COPY_FIELD(password);
+        COPY_FIELD(min_feature);
+        return table;
       })
     .def(
       "get_sfnt_name_table",
@@ -512,19 +572,6 @@ keys to the corresponding 'name' bytestrings.
     .def(
       "get_sfnt_table",
       [](Face const& pyface, std::string tag) -> std::optional<py::dict> {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wstrict-aliasing"
-#define COPY_FIELD(field) { \
-    using type = decltype(ptr->field); \
-    if constexpr (std::is_array_v<type>) { \
-      table[#field] = \
-        *reinterpret_cast< \
-          std::array<std::remove_extent_t<type>, std::extent_v<type>>*>( \
-            &ptr->field); \
-    } else { \
-      table[#field] = ptr->field; \
-    } \
-  }
         auto face = pyface.ptr.get();
         if (!FT_IS_SFNT(face)) {
           throw std::runtime_error("Font not using the SFNT storage scheme");
@@ -712,60 +759,7 @@ keys to the corresponding 'name' bytestrings.
         }
         return table;
       })
-    .def(
-      "get_ps_font_info",
-      [](Face const& pyface) -> py::dict {
-        auto psfontinfo = PS_FontInfoRec{};
-        auto ptr = &psfontinfo;
-        FT_CHECK(FT_Get_PS_Font_Info, pyface.ptr.get(), ptr);
-        auto table = py::dict{};
-        COPY_FIELD(version);
-        COPY_FIELD(notice);
-        COPY_FIELD(full_name);
-        COPY_FIELD(family_name);
-        COPY_FIELD(weight);
-        COPY_FIELD(italic_angle);
-        COPY_FIELD(is_fixed_pitch);
-        COPY_FIELD(underline_position);
-        COPY_FIELD(underline_thickness);
-        return table;
-      })
-    .def(
-      "get_ps_font_private",
-      [](Face const& pyface) -> py::dict {
-        auto psfontprivate = PS_PrivateRec{};
-        auto ptr = &psfontprivate;
-        FT_CHECK(FT_Get_PS_Font_Private, pyface.ptr.get(), ptr);
-        auto table = py::dict{};
-        COPY_FIELD(unique_id);
-        COPY_FIELD(lenIV);
-        COPY_FIELD(num_blue_values);
-        COPY_FIELD(num_other_blues);
-        COPY_FIELD(num_family_blues);
-        COPY_FIELD(num_family_other_blues);
-        COPY_FIELD(blue_values);
-        COPY_FIELD(other_blues);
-        COPY_FIELD(family_blues);
-        COPY_FIELD(family_other_blues);
-        table["blue_scale"] = psfontprivate.blue_scale / 65536.;
-        COPY_FIELD(blue_shift);
-        COPY_FIELD(blue_fuzz);
-        COPY_FIELD(standard_width);
-        COPY_FIELD(standard_height);
-        COPY_FIELD(num_snap_widths);
-        COPY_FIELD(num_snap_heights);
-        COPY_FIELD(force_bold);
-        COPY_FIELD(round_stem_up);
-        COPY_FIELD(snap_widths);
-        COPY_FIELD(snap_heights);
-        table["expansion_factor"] = psfontprivate.expansion_factor / 65536.;
-        COPY_FIELD(language_group);
-        COPY_FIELD(password);
-        COPY_FIELD(min_feature);
-        return table;
-#pragma GCC diagnostic pop
 #undef COPY_FIELD
-      })
     .def(
       "load_char",
       [](Face const& pyface, FT_ULong codepoint, FT_Int32 flags) -> void {
@@ -790,10 +784,12 @@ keys to the corresponding 'name' bytestrings.
       },
       "pt_size"_a, "dpi"_a)
     .def(
-      "get_font_format",
-      [](Face const& pyface) -> std::string {
-        // NOTE Deprecated & renamed to FT_Get_Font_Format in FreeType 2.6.
-        return FT_Get_X11_Font_Format(pyface.ptr.get());
+      "set_charmap",
+      [](Face const& pyface, CharMap const& pycharmap) -> void {
+        FT_CHECK(
+          FT_Set_Charmap,
+          pyface.ptr.get(),
+          pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index])
       })
     .def(
       "_list_sfnt_tables",
