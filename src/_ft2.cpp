@@ -312,6 +312,11 @@ The face index in the font file.
         return names;
       })
     .def(
+      "get_name_index",
+      [](Face const& pyface, std::string glyph_name) -> FT_UInt {
+        return FT_Get_Name_Index(pyface.ptr.get(), glyph_name.data());
+      })
+    .def(
       "get_postscript_name",
       [](Face const& pyface) -> char const* {
         return FT_Get_Postscript_Name(pyface.ptr.get());
@@ -772,6 +777,21 @@ keys to the corresponding 'name' bytestrings.
       [](Face const& pyface) -> std::string {
         // NOTE Deprecated & renamed to FT_Get_Font_Format in FreeType 2.6.
         return FT_Get_X11_Font_Format(pyface.ptr.get());
+      })
+    .def(
+      "_list_sfnt_tables",
+      [](Face const& pyface) -> std::vector<std::string> {
+        auto n_tables = FT_ULong{}, table_length = FT_ULong{};
+        FT_CHECK(FT_Sfnt_Table_Info, pyface.ptr.get(), 0, nullptr, &n_tables);
+        auto tags = std::vector<std::string>{};
+        for (auto i = FT_ULong{}; i < n_tables; ++i) {
+          auto tag = FT_ULong{};
+          FT_CHECK(
+            FT_Sfnt_Table_Info, pyface.ptr.get(), i, &tag, &table_length);
+          tags.push_back(
+            {char(tag >> 24), char(tag >> 16), char(tag >> 8), char(tag)});
+        }
+        return tags;
       });
 
   py::class_<CharMap>(m, "CharMap", R"__doc__(
