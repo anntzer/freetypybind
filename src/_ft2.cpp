@@ -143,6 +143,15 @@ case is explicitly mentioned where applicable.
   DECLARE_ENUM(PIXELS);
 #undef DECLARE_ENUM
 
+  py::enum_<FT_Glyph_Format>(m, "GlyphFormat")
+#define DECLARE_ENUM(name) .value(#name, FT_GLYPH_FORMAT_##name)
+  DECLARE_ENUM(NONE)
+  DECLARE_ENUM(COMPOSITE)
+  DECLARE_ENUM(BITMAP)
+  DECLARE_ENUM(OUTLINE)
+  DECLARE_ENUM(PLOTTER);
+#undef DECLARE_ENUM
+
   py::class_<Face>(m, "Face", R"__doc__(
 A lightweight wrapper around a ``FT_Face``.
 
@@ -980,7 +989,10 @@ Prepare a list of manually laid out glyphs and rectangles for rendering.
     [](Glyph const& glyph)
     -> std::tuple<std::vector<std::tuple<double, double>>, std::vector<int>> {
       if (glyph.ptr->format != FT_GLYPH_FORMAT_OUTLINE) {
-        throw std::runtime_error("Not an outline glyph");
+        throw std::runtime_error(
+          "Glyph format is "
+          + py::cast(glyph.ptr->format).attr("name").cast<std::string>()
+          + ", not OUTLINE");
       }
       // outline.n_points seems invalid :-(
       auto path = std::tuple<std::vector<std::tuple<double, double>>,
