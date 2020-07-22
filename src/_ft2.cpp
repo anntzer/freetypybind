@@ -278,6 +278,19 @@ The face index in the font file.
       },
       "path"_a)
     .def(
+      "face_get_chars_of_variant",
+      [](Face const& pyface, FT_ULong variantSelector) -> std::vector<FT_UInt32> {
+        auto cs = FT_Face_GetCharsOfVariant(pyface.ptr.get(), variantSelector);
+        return {cs, std::find(cs, cs + 0x10ffff, 0)};
+      },
+      "variant_selector"_a)
+    .def(
+      "face_get_variant_selectors",
+      [](Face const& pyface) -> std::vector<FT_UInt32> {
+        auto vs = FT_Face_GetVariantSelectors(pyface.ptr.get());
+        return {vs, std::find(vs, vs + 0x10ffff, 0)};
+      })
+    .def(
       "get_char_index",
       [](Face const& pyface, FT_ULong codepoint) -> FT_UInt {
         return FT_Get_Char_Index(pyface.ptr.get(), codepoint);
