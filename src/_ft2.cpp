@@ -337,7 +337,8 @@ The face index in the font file.
       "get_name_index",
       [](Face const& pyface, std::string glyph_name) -> FT_UInt {
         return FT_Get_Name_Index(pyface.ptr.get(), glyph_name.data());
-      })
+      },
+      "glyph_name"_a)
     .def(
       "get_postscript_name",
       [](Face const& pyface) -> char const* {
