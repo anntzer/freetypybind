@@ -4,11 +4,21 @@
 
 namespace matplotlib::ft2 {
 
-Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
+Face::Face(
+  std::string const& path, std::optional<FT_Long> index, double hinting_factor) :
   ptr{
     [&]() -> std::shared_ptr<FT_FaceRec> {
       auto face = FT_Face{};
-      FT_CHECK(FT_New_Face, library, path.data(), index, &face);
+      if (!index) {
+        FT_CHECK(FT_New_Face, library, path.data(), -1, &face);
+        if (face->num_faces != 1) {
+          throw std::runtime_error(
+            "More that one face in font file; index must be set");
+        }
+        *index = 0;
+        FT_CHECK(FT_Done_Face, face);  // ... and continue loading.
+      }
+      FT_CHECK(FT_New_Face, library, path.data(), *index, &face);
       auto transform = FT_Matrix{
         FT_Fixed(65536. / hinting_factor), 0, 0, 65536};
       FT_Set_Transform(face, &transform, nullptr);
@@ -16,7 +26,7 @@ Face::Face(std::string const& path, FT_Long index, double hinting_factor) :
     }()
   },
   path{path},
-  index{index},
+  index{index ? *index : 0},
   hinting_factor{hinting_factor}
 {}
 
@@ -160,7 +170,8 @@ units.
 )__doc__")
     .def(
       py::init(
-        [](py::object path, FT_Long index, double hinting_factor) -> Face* {
+        [](py::object path, std::optional<FT_Long> index, double hinting_factor)
+        -> Face* {
           PyBytesObject* path_bytes = nullptr;
           PY_CHECK(PyUnicode_FSConverter, path.ptr(), &path_bytes);
           auto path_bytes_11 =  // For cleanup.
@@ -170,7 +181,7 @@ units.
             PY_CHECK(PyBytes_AsString, path_bytes_11.ptr()),
             index, hinting_factor};
         }),
-      "path"_a, "index"_a, "hinting_factor"_a=1,
+      "path"_a, "index"_a=py::none(), "hinting_factor"_a=1,
       R"__doc__(
 Load a `Face` from a bytestring path name, encoded with the file system
 encoding.

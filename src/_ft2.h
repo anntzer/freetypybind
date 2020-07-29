@@ -12,7 +12,8 @@ struct Face {
   FT_Long index;
   double const hinting_factor;
 
-  Face(std::string const& path, FT_Long index, double hinting_factor);
+  Face(
+    std::string const& path, std::optional<FT_Long> index, double hinting_factor);
 };
 
 struct CharMap {
