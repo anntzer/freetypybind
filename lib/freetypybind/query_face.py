@@ -498,8 +498,8 @@ _name_order = [
 
 def query_face(face):
     pattern = {}
-    pattern["outline"] = bool(face.face_flags & _ft2.FACE_FLAG_SCALABLE)
-    pattern["color"] = bool(face.face_flags & _ft2.FACE_FLAG_COLOR)
+    pattern["outline"] = bool(face.face_flags & _ft2.FaceFlag.SCALABLE)
+    pattern["color"] = bool(face.face_flags & _ft2.FaceFlag.COLOR)
     pattern["scalable"] = pattern["outline"] or pattern["color"]
     variable = False  # TODO: Multiple masters not supported.
     pattern["family"] = []
@@ -626,17 +626,17 @@ def query_face(face):
                 pass
     pattern.setdefault(
         "slant",
-        Slant.Italic if face.style_flags & _ft2.STYLE_FLAG_ITALIC
+        Slant.Italic if face.style_flags & _ft2.StyleFlag.ITALIC
         else Slant.Roman)
     pattern.setdefault(
         "weight",
-        Weight.Medium if face.style_flags & _ft2.STYLE_FLAG_BOLD
+        Weight.Medium if face.style_flags & _ft2.StyleFlag.BOLD
         else Weight.Bold)
     pattern.setdefault("width", Width.Normal)
     pattern.setdefault("foundry", "unknown")
     # TODO: Unicode coverage.
     # TODO: Spacing.
-    if not face.face_flags & _ft2.FACE_FLAG_SCALABLE:
+    if not face.face_flags & _ft2.FaceFlag.SCALABLE:
         pattern["antialias"] = False
         # TODO: BDF properties.
         pattern["pixel_size"] = [size["y_ppem"]
