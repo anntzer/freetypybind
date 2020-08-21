@@ -502,32 +502,28 @@ The face index in the font file.
                 language_id =
                   py::cast(detail::tt_mac_langids.at(sfnt_name.language_id));
               }
-              if (sfnt_name.language_id == TT_MAC_LANGID_ENGLISH) {
-                // e.g. Corsiva.ttc which claims (incorrectly) to use Hebrew
-                // encoding...
-                encoding_id = py::cast("MAC_ROMAN <inferred>");
-                entry = entry.attr("decode")("mac_roman", "backslashreplace");
-              } else if (sfnt_name.encoding_id == sfnt_name.language_id) {
-                // This seems to happen quite often; then the encoding is usually
-                // wrong and the language is correct (fc just gives up after some
-                // fudging)...
+              if (sfnt_name.encoding_id == sfnt_name.language_id) {
+                // This seems to happen quite often; then the encoding is
+                // usually wrong and the language is correct (fc just gives up
+                // after some fudging)...
                 // https://en.wikipedia.org/wiki/Code_page#Macintosh_emulation_code_pages_2
                 switch (sfnt_name.language_id) {
+                  case TT_MAC_LANGID_ENGLISH:
+                    // e.g. Corsiva.ttc claims (incorrectly) to use Hebrew
+                    // encoding...
+                    encoding_id = py::cast("MAC_ROMAN");
+                    break;
                   case TT_MAC_LANGID_JAPANESE:  // 11
-                    encoding_id = py::cast("X_MAC_JAPANESE <inferred>");
-                    entry = entry.attr("decode")("x_mac_japanese", "backslashreplace");
+                    encoding_id = py::cast("X_MAC_JAPANESE");
                     break;
                   case TT_MAC_LANGID_ARABIC:  // 12
-                    encoding_id = py::cast("MAC_ARABIC <inferred>");
-                    entry = entry.attr("decode")("mac_arabic", "backslashreplace");
+                    encoding_id = py::cast("MAC_ARABIC");
                     break;
                   case TT_MAC_LANGID_CHINESE_TRADITIONAL:  // 19
-                    encoding_id = py::cast("X_MAC_TRAD_CHINESE <inferred>");
-                    entry = entry.attr("decode")("x_mac_trad_chinese", "backslashreplace");
+                    encoding_id = py::cast("X_MAC_TRAD_CHINESE");
                     break;
                   case TT_MAC_LANGID_KOREAN:  // 23
-                    encoding_id = py::cast("X_MAC_KOREAN <inferred>");
-                    entry = entry.attr("decode")("x_mac_korean", "backslashreplace");
+                    encoding_id = py::cast("X_MAC_KOREAN");
                     break;
                   // http://www.unicode.org/Public/MAPPINGS/VENDORS/APPLE/CENTEURO.TXT
                   case TT_MAC_LANGID_LITHUANIAN:  // 24
@@ -537,66 +533,66 @@ The face index in the font file.
                   case TT_MAC_LANGID_LETTISH:  // 28
                   case TT_MAC_LANGID_CZECH:  // 38
                   case TT_MAC_LANGID_SLOVAK:  // 39
-                    encoding_id = py::cast("MAC_CENTEURO <inferred>");
-                    entry = entry.attr("decode")("mac_centeuro", "backslashreplace");
+                    encoding_id = py::cast("MAC_CENTEURO");
                     break;
                   case TT_MAC_LANGID_FARSI:  // 31
-                    encoding_id = py::cast("MAC_FARSI <inferred>");
-                    entry = entry.attr("decode")("mac_farsi", "backslashreplace");
+                    encoding_id = py::cast("MAC_FARSI");
                     break;
                   case TT_MAC_LANGID_RUSSIAN:  // 32
                   case TT_MAC_LANGID_BULGARIAN:  // 44
                   case TT_MAC_LANGID_UKRAINIAN:  // 45
                   case TT_MAC_LANGID_BYELORUSSIAN:  // 46
-                    encoding_id = py::cast("MAC_CYRILLIC <inferred>");
-                    entry = entry.attr("decode")("mac_cyrillic", "backslashreplace");
+                    encoding_id = py::cast("MAC_CYRILLIC");
                     break;
                   case TT_MAC_LANGID_CHINESE_SIMPLIFIED:  // 33
-                    encoding_id = py::cast("X_MAC_SIMP_CHINESE <inferred>");
-                    entry = entry.attr("decode")("x_mac_simp_chinese", "backslashreplace");
+                    encoding_id = py::cast("X_MAC_SIMP_CHINESE");
                     break;
+                  default:
+                    goto skip_decode;
+                }
+                entry = entry.attr("decode")(encoding_id, "backslashreplace");
+                // If encoding_id == language_id == 0, then the encoding was
+                // actually correct.
+                if (sfnt_name.encoding_id != 0) {
+                  // Not += which doesn't actually update the immutable string.
+                  encoding_id = encoding_id + py::cast(" <inferred>");
                 }
               } else {
                 switch (sfnt_name.encoding_id) {
                   case TT_MAC_ID_ROMAN:  // 0
                     encoding_id = py::cast("MAC_ROMAN");
-                    entry = entry.attr("decode")("mac_roman");
                     break;
                   case TT_MAC_ID_JAPANESE:  // 1
                     encoding_id = py::cast("X_MAC_JAPANESE");
-                    entry = entry.attr("decode")("x_mac_japanese", "backslashreplace");
                     break;
                   case TT_MAC_ID_TRADITIONAL_CHINESE:  // 2
                     encoding_id = py::cast("X_MAC_TRAD_CHINESE");
-                    entry = entry.attr("decode")("x_mac_trad_chinese", "backslashreplace");
                     break;
                   case TT_MAC_ID_KOREAN:  // 3
                     encoding_id = py::cast("X_MAC_KOREAN");
-                    entry = entry.attr("decode")("x_mac_korean", "backslashreplace");
                     break;
                   case TT_MAC_ID_ARABIC:  // 4
                     encoding_id = py::cast("MAC_ARABIC");
-                    entry = entry.attr("decode")("mac_arabic", "backslashreplace");
                     break;
                   case TT_MAC_ID_HEBREW:  // 5
-                    encoding_id = py::cast("X_MAC_HEBREW <inferred>");
+                    encoding_id = py::cast("X_MAC_HEBREW");
                     entry =
                       py::module::import("freetypybind._x_mac_hebrew")
                       .attr("Codec")().attr("decode")(entry, "backslashreplace")[py::int_(0)];
-                    break;
+                    goto skip_decode;
                   case TT_MAC_ID_RUSSIAN:  // 7
                     encoding_id = py::cast("MAC_CYRILLIC");
-                    entry = entry.attr("decode")("mac_cyrillic", "backslashreplace");
                     break;
                   case TT_MAC_ID_SIMPLIFIED_CHINESE:  // 25
                     encoding_id = py::cast("X_MAC_SIMP_CHINESE");
-                    entry = entry.attr("decode")("x_mac_simp_chinese", "backslashreplace");
                     break;
                   case TT_MAC_ID_SLAVIC:  // 29
                     encoding_id = py::cast("MAC_CENTEURO");
-                    entry = entry.attr("decode")("mac_centeuro", "backslashreplace");
                     break;
+                  default:
+                    goto skip_decode;
                 }
+                entry = entry.attr("decode")(encoding_id, "backslashreplace");
               }
               break;
             case TT_PLATFORM_MICROSOFT:
@@ -609,6 +605,7 @@ The face index in the font file.
               entry = entry.attr("decode")("utf-16-be");
               break;
           }
+          skip_decode: ;
           py::object name_id =
             sfnt_name.name_id < detail::tt_name_ids.size()
             ? py::cast(detail::tt_name_ids[sfnt_name.name_id])
