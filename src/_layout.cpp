@@ -109,10 +109,8 @@ py::array_t<uint8_t> Layout::render()
        ymax = int(std::ceil(bbox.yMax / 64.)),
        width = xmax - xmin,
        height = ymax - ymin;
-  auto array =
-    py::array_t<uint8_t>{size_t(height * width), nullptr}
-    .attr("reshape")(height, width).cast<py::array_t<uint8_t>>();
-  auto buf = array.mutable_unchecked().mutable_data(0);
+  auto array = py::array_t<uint8_t>{{height, width}};
+  auto buf = array.mutable_data(0);
   std::memset(buf, 0, width * height);
   for (auto glyph: glyphs) {
     // TODO: Aliased version.

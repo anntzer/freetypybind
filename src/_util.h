@@ -38,12 +38,11 @@ extern std::unordered_map<FT_Error, std::string> ft_errors;
   } \
 }
 
-#define PY_CHECK(func, ...) \
-  [&]() { \
-    auto const value_ = func(__VA_ARGS__); \
-    if (PyErr_Occurred()) { \
-      throw pybind11::error_already_set{}; \
-    } else { \
-      return value_; \
-    } \
-  }()
+#define PY_CHECK(func, ...) [&] { \
+  auto const value_ = func(__VA_ARGS__); \
+  if (PyErr_Occurred()) { \
+    throw pybind11::error_already_set{}; \
+  } else { \
+    return value_; \
+  } \
+}()
