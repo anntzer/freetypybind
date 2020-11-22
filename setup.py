@@ -1,19 +1,17 @@
-from setupext import find_packages, setup
+from setupext import find_packages, pkg_config, setup
 
 
-@setup.add_extension
-def make_extension():
+@setup.add_extensions
+def make_extensions():
     import p11x
-    return p11x.configure(
+    yield pkg_config(
         p11x.Extension(
             "freetypybind._ft2",
             ["src/_ft2.cpp", "src/_layout.cpp", "src/_util.cpp",
              "src/_sfnt_tables.cpp"],
-            depends=["setup.py", "src/_ft2.h", "src/_layout.h", "src/_util.h",
-                     "src/_sfnt_tables.h"],
             cxx_std=17,
         ),
-        pkg_config=["freetype2"],
+        ["freetype2"],
     )
 
 

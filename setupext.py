@@ -3,11 +3,11 @@ setuptools helper.
 
 The following decorators are provided::
 
-    # Define an extension module with the possibility to import setup_requires.
-    @setup.add_extension
-    def make_extension():
-        import some_setup_requires.
-        return Extension(...)
+    # Define extension modules with the possibility to import setup_requires.
+    @setup.add_extensions
+    def make_extensions():
+        import some_setup_requires
+        yield pkg_config(Extension(...), [pkg, ...])
 
     # Add a pth hook.
     @setup.register_pth_hook("hook_name.pth")
@@ -15,38 +15,52 @@ The following decorators are provided::
         # hook contents.
 """
 
-from distutils.version import LooseVersion
-from functools import partial
+import functools
 import inspect
-import re
+import os
 from pathlib import Path
-import traceback
+import re
+import shlex
+import subprocess
 
 import setuptools
+# find_namespace_packages itself bounds support to setuptools>=40.1.
 from setuptools import Extension, find_namespace_packages, find_packages
 from setuptools.command.build_ext import build_ext
 from setuptools.command.develop import develop
 from setuptools.command.install_lib import install_lib
 
 
-if LooseVersion(setuptools.__version__) < "40.1":  # find_namespace_packages
-    raise ImportError("setuptools>=40.1 is required")
-
-
 __all__ = ["Extension", "find_namespace_packages", "find_packages", "setup"]
 
 
 class build_ext_mixin:
+    _ext_gens_called = False
+
     def finalize_options(self):
-        # This is called once by egg_info (to get the source files for the
-        # MANIFEST) and once to really prepare building the extensions.  The
-        # first time, install_requires have not been installed yet, so we still
-        # can't generate the extension objects.
-        if setuptools.command.egg_info.__file__ not in [
-                fs.filename for fs in traceback.extract_stack()]:
+        if not self._ext_gens_called:
             self.distribution.ext_modules[:] = [
-                ext_maker() for ext_maker in _ext_makers]
+                ext for ext_gen in _ext_gens for ext in ext_gen()]
+            if len(self.distribution.ext_modules) == 1:
+                ext, = self.distribution.ext_modules
+                if (not ext.depends
+                        and all(src.parent == Path("src")
+                                for src in map(Path, ext.sources))):
+                    ext.depends = ["setup.py", *Path("src").glob("*.*")]
+            self._ext_gens_called = True
         super().finalize_options()
+
+
+def pkg_config(ext, pkgs=[]):
+    """Mutate and return an Extension using pkg-config build information."""
+    cmd = {"posix": ["pkg-config"], "nt": ["pkg-config", "--msvc-syntax"]}[
+        os.name]
+    for pkg in pkgs:
+        for attr, flag in [("extra_compile_args", "--cflags"),
+                           ("extra_link_args", "--libs")]:
+            getattr(ext, attr).extend(shlex.split(subprocess.check_output(
+                [*cmd, flag, pkg], universal_newlines=True)))
+    return ext
 
 
 class pth_hook_mixin:
@@ -79,13 +93,13 @@ def setup(**kwargs):
         {})
     kwargs.setdefault(
         # Don't tag wheels as dist-specific if no extension.
-        "ext_modules", [Extension("", [])] if _ext_makers else [])
+        "ext_modules", [Extension("", [])] if _ext_gens else [])
     setuptools.setup(**kwargs)
 
 
 def register_pth_hook(fname, func=None):
     if func is None:
-        return partial(register_pth_hook, fname)
+        return functools.partial(register_pth_hook, fname)
     source = inspect.getsource(func)
     if not re.match(r"\A@setup\.register_pth_hook.*\ndef ", source):
         raise SyntaxError("register_pth_hook must be used as a toplevel "
@@ -99,7 +113,7 @@ def register_pth_hook(fname, func=None):
     _pth_hooks.append((fname, func.__name__, source))
 
 
-_ext_makers = []
+_ext_gens = []
 _pth_hooks = []
-setup.add_extension = _ext_makers.append
+setup.add_extensions = _ext_gens.append
 setup.register_pth_hook = register_pth_hook
