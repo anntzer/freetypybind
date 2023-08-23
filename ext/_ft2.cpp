@@ -1,8 +1,7 @@
 #include "_ft2.h"
 #include "_layout.h"
+#include "_p11x_enum.h"
 #include "_sfnt_tables.h"
-
-#include <p11x/enum.h>
 
 #define ITER_ENUM(ENUM_ITEM) \
   ENUM_ITEM(SCALABLE), \
