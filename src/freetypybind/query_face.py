@@ -572,7 +572,7 @@ def query_face(face):
     except StopIteration:
         pass
     pattern["file"] = face.path
-    pattern["index"] = face.index
+    pattern["index"] = face.face_index
     pattern["fontversion"] = head_t["Font_Revision"] if head_t else 0
     # TODO: Check for multiple "exclusive" languages.
     if os2_t and os2_t["version"] != 0xffff:

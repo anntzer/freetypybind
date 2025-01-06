@@ -225,19 +225,24 @@ encoding.
       R"__doc__(
 The path from which the `Face` was loaded.
 )__doc__")
-    .def_property_readonly(
-      "index",
-      [](Face const& pyface) -> FT_Long const& { return pyface.index; },
-      R"__doc__(
-The face index in the font file.
-)__doc__")
 
 #define DECLARE_FIELD(prop, ...) \
   .def_property_readonly( \
     #prop, [](Face const& pyface) { return __VA_ARGS__(pyface.ptr->prop); })
     DECLARE_FIELD(num_faces)
+    DECLARE_FIELD(face_index, [](auto i) { return i & 0xffff; })
+    .def_property_readonly(
+      "named_instance_index",
+      [](Face const& pyface) {
+        return pyface.ptr->face_index >> 16;
+      })
     DECLARE_FIELD(face_flags, FaceFlag)
-    DECLARE_FIELD(style_flags, StyleFlag)
+    DECLARE_FIELD(style_flags, [](auto s) { return StyleFlag(s & 0xffff); })
+    .def_property_readonly(
+      "num_named_instances",
+      [](Face const& pyface) {
+        return pyface.ptr->style_flags >> 16;
+      })
     DECLARE_FIELD(num_glyphs)
     DECLARE_FIELD(family_name)
     DECLARE_FIELD(style_name)
