@@ -12,12 +12,7 @@ description = ""
 readme = "README.rst"
 authors = [{name = "Antony Lee"}]
 urls = {Repository = "https://github.com/anntzer/freetypybind"}
-license = {text = "zlib"}
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "License :: OSI Approved :: zlib/libpng License",
-    "Programming Language :: Python :: 3",
-]
+classifiers = []
 dynamic = ["version"]
 
 [tool.setuptools_scm]
