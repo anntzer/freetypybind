@@ -339,6 +339,19 @@ The path from which the `Face` was loaded.
         return {vs, std::find(vs, vs + 0x10ffff, 0)};
       })
     .def(
+      "get_advance",
+      [](Face const& pyface, FT_UInt gindex, FT_Int32 flags) {
+        auto advance = FT_Fixed{};
+        FT_CHECK(FT_Get_Advance, pyface.ptr.get(), gindex, flags, &advance);
+        auto pyadvance = std::variant<double, FT_Fixed>{};
+        if (flags & FT_LOAD_NO_SCALE) {
+          pyadvance = advance;
+        } else {
+          pyadvance = advance / 65536.;
+        }
+        return pyadvance;
+      })
+    .def(
       "get_char_index",
       [](Face const& pyface, FT_ULong codepoint) -> FT_UInt {
         return FT_Get_Char_Index(pyface.ptr.get(), codepoint);
@@ -875,7 +888,7 @@ A lightweight wrapper around a ``FT_CharMap``.
         auto charmap = pycharmap.face.cast<Face>().ptr->charmaps[pycharmap.index];
         return
           "<CharMap "s +
-          "encoding="s + py::str(py::cast(charmap->encoding)).cast<std::string>() + ", "s +
+          "encoding="s + py::repr(py::cast(charmap->encoding)).cast<std::string>() + ", "s +
           "platform_id='"s + detail::tt_platforms.at(charmap->platform_id) + "', "s +
           "encoding_id="s + std::to_string(charmap->encoding_id) +
           ">"s;
